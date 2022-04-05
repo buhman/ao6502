@@ -3,26 +3,31 @@
         ;; uint16_t ** input_j = 2;
         ;; uint16_t ** input_k = 4;
         ;; uint8_t * k_index = 0;
-                LDA # 01    ;;
-                STA zp 4    ;;
-                LDA # 80    ;;
-                STA zp 5    ;; *input_k = input
-                LDA a 8000  ;;
-                STA zp 0    ;; *k_index = *input_len
+                LDA # :_bin_input_start_l    ;;
+                STA zp 4                     ;;
+                LDA # :_bin_input_start_h    ;;
+                STA zp 5                     ;; *input_k = input
+                LDA # :_bin_input_size_h     ;;
+                LSR A                        ;;
+                LDA # :_bin_input_size_l     ;;
+                ROR A                        ;;
+                STA zp 0                     ;; *input_len = _bin_input_size / 2
+                STA zp 1                     ;; *k_index = *input_len
 
-_loopx:         LDA # 01    ;;
-                STA zp 2    ;;
-                LDA # 80    ;;
-                STA zp 3    ;; *input_j = input
-                LDA a 8000  ;;
-                TAX i       ;; X = *input_len
+
+_loopx:         LDA # :_bin_input_start_l    ;;
+                STA zp 2                     ;;
+                LDA # :_bin_input_start_h    ;;
+                STA zp 3                     ;; *input_j = input
+                LDA zp 0                     ;; (input_size)
+                TAX i                        ;; X = *input_len
 
 _loop:          CLC i         ;; /* 16-bit addition+comparison (lower byte) */
                 LDY # 0       ;;
                 LDA (zp),y 2  ;;
                 ADC (zp),y 4  ;; A = ((uint8_t *)(*input_j))[0] + ((uint8_t *)(*input_k))[0]
                 PHP s         ;;
-                CMP # E4      ;;
+                CMP # e4      ;;
                 BNE r :_next  ;; if (A != 0xE4) goto _next
 
                 PLP s         ;; /* 16-bit addition+comparison (upper byte) */
@@ -49,9 +54,9 @@ _next:          CLC i         ;;
                 LDA zp 5      ;;
                 ADC # 0       ;;
                 STA zp 5      ;; *input_k = *input_k + 2
-                LDY zp 0      ;;
+                LDY zp 1      ;;
                 DEY i         ;;
-                STY zp 0      ;; *k_index = k_index - 1;
+                STY zp 1      ;; *k_index = k_index - 1;
                 BNE r :_loopx ;; if (*k_index != 0) goto _loopx
 
 _not_found:     JMP a :_not_found
@@ -60,17 +65,17 @@ _found:         LDY # 0       ;; copy **input_j and **input_k to mul24 `a` and `
                 LDA (zp),y 2  ;;
                 STA zp 8      ;;
                 LDA (zp),y 4  ;;
-                STA zp B      ;;
+                STA zp b      ;;
                               ;;
                 LDY # 1       ;;
                 LDA (zp),y 2  ;;
                 STA zp 9      ;;
                 LDA (zp),y 4  ;;
-                STA zp C      ;;
+                STA zp c      ;;
                               ;;
                 LDA # 0       ;;
-                STA zp A      ;;
-                STA zp D      ;;
+                STA zp a      ;;
+                STA zp d      ;;
 
 ;; multiply two 24-bit operands; 24-bit product
 ;;
@@ -86,7 +91,7 @@ mul24:          LDA # 0
 
 _mul24_loop:    LDA zp 8          ;; while (a) {
                 ORA zp 9          ;;
-                ORA zp A          ;;
+                ORA zp a          ;;
                 BEQ r :_mul24_ret ;;
 
                 LDA # 1              ;; if (a & 1)
@@ -94,23 +99,23 @@ _mul24_loop:    LDA zp 8          ;; while (a) {
                 BEQ r :_mul24_nand_1 ;;
 
                 CLC i            ;; r += b;
-                LDA zp B         ;;; 7..0
+                LDA zp b         ;;; 7..0
                 ADC zp 10         ;;
                 STA zp 10         ;;
-                LDA zp C         ;;; 15..8
+                LDA zp c         ;;; 15..8
                 ADC zp 11         ;;
                 STA zp 11         ;;
-                LDA zp D         ;;; 23..16
+                LDA zp d         ;;; 23..16
                 ADC zp 12         ;;
                 STA zp 12         ;;
 
-_mul24_nand_1:  LSR zp A         ;; a >>= 1
+_mul24_nand_1:  LSR zp a         ;; a >>= 1
                 ROR zp 9         ;;
                 ROR zp 8         ;;
 
-                ASL zp B         ;; b <<= 1
-                ROL zp C         ;;
-                ROL zp D         ;;
+                ASL zp b         ;; b <<= 1
+                ROL zp c         ;;
+                ROL zp d         ;;
 
                 JMP a :_mul24_loop ;; }
 
